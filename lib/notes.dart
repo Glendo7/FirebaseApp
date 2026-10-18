@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'notifications.dart';
 
 class NotesPage extends StatefulWidget {
   const NotesPage({super.key});
@@ -51,16 +52,27 @@ class _NotesPageState extends State<NotesPage> {
     });
 
     try {
-      await _col.add({
+      final note = await _col.add({
         'description': text,
         'createdAt': FieldValue.serverTimestamp(),
       });
 
+      await Notifications.show(
+        id: note.id.hashCode,
+        title: 'Nota criada',
+        body: text,
+        payload: note.id,
+      );
+
       createController.clear();
     } catch (e) {
-      setState(() => message = 'Erro: $e');
+      if (mounted) {
+        setState(() => message = 'Erro: $e');
+      }
     } finally {
-      if (mounted) setState(() => loading = false);
+      if (mounted) {
+        setState(() => loading = false);
+      }
     }
   }
 
@@ -104,7 +116,9 @@ class _NotesPageState extends State<NotesPage> {
 
       _cancelInlineEdit();
     } catch (e) {
-      setState(() => message = 'Erro ao atualizar: $e');
+      if (mounted) {
+        setState(() => message = 'Erro ao atualizar: $e');
+      }
     }
   }
 
@@ -130,10 +144,16 @@ class _NotesPageState extends State<NotesPage> {
     );
 
     if (ok == true) {
-      await _col.doc(docId).delete();
+      try {
+        await _col.doc(docId).delete();
 
-      if (editingId == docId) {
-        _cancelInlineEdit();
+        if (mounted && editingId == docId) {
+          _cancelInlineEdit();
+        }
+      } catch (e) {
+        if (mounted) {
+          setState(() => message = 'Erro ao remover: $e');
+        }
       }
     }
   }
@@ -169,18 +189,14 @@ class _NotesPageState extends State<NotesPage> {
                   ],
                 ),
               ),
-
               if (loading)
                 const CircularProgressIndicator(),
-
               if (message != null)
                 Padding(
                   padding: const EdgeInsets.only(top: 12),
                   child: Text(message!),
                 ),
-
               const Divider(),
-
               Expanded(
                 child: StreamBuilder<
                     QuerySnapshot<Map<String, dynamic>>>(
@@ -212,7 +228,7 @@ class _NotesPageState extends State<NotesPage> {
                     return ListView.separated(
                       itemCount: docs.length,
                       separatorBuilder: (_, _) =>
-    const Divider(height: 0),
+                          const Divider(height: 0),
                       itemBuilder: (context, i) {
                         final doc = docs[i];
                         final data = doc.data();

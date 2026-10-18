@@ -1,9 +1,14 @@
+
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:permission_handler/permission_handler.dart';
+
 import 'firebase_options.dart';
 import 'login.dart';
 import 'welcome.dart';
+import 'notes.dart';
+import 'notifications.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -11,6 +16,9 @@ Future<void> main() async {
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
+
+  await Notifications.init();
+  await Permission.notification.request();
 
   runApp(const MyApp());
 }
@@ -60,11 +68,30 @@ class HomePage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("Home")),
+      appBar: AppBar(title: const Text('Home')),
       drawer: Drawer(
         child: ListView(
           padding: EdgeInsets.zero,
           children: [
+            const DrawerHeader(
+              child: Text(
+                'Firebase App',
+                style: TextStyle(fontSize: 22),
+              ),
+            ),
+            ListTile(
+              leading: const Icon(Icons.note_alt),
+              title: const Text('Minhas notas'),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const NotesPage(),
+                  ),
+                );
+              },
+            ),
             ListTile(
               leading: const Icon(Icons.logout),
               title: const Text('Sair'),
