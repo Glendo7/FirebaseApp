@@ -1,8 +1,10 @@
-
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:latlong2/latlong.dart' as ll;
+
 import 'notifications.dart';
+import 'maps.dart';
 
 class NotesPage extends StatefulWidget {
   const NotesPage({super.key});
@@ -76,15 +78,12 @@ class _NotesPageState extends State<NotesPage> {
     }
   }
 
-  void _startInlineEdit(
-    DocumentSnapshot<Map<String, dynamic>> doc,
-  ) {
+  void _startInlineEdit(DocumentSnapshot<Map<String, dynamic>> doc) {
     final data = doc.data();
 
     setState(() {
       editingId = doc.id;
-      inlineController.text =
-          (data?['description'] ?? '').toString();
+      inlineController.text = (data?['description'] ?? '').toString();
     });
 
     Future.microtask(() => inlineFocus.requestFocus());
@@ -102,9 +101,7 @@ class _NotesPageState extends State<NotesPage> {
     final newText = inlineController.text.trim();
 
     if (newText.isEmpty) {
-      setState(
-        () => message = 'A descrição não pode ser vazia.',
-      );
+      setState(() => message = 'A descrição não pode ser vazia.');
       return;
     }
 
@@ -127,9 +124,7 @@ class _NotesPageState extends State<NotesPage> {
       context: context,
       builder: (_) => AlertDialog(
         title: const Text('Remover nota'),
-        content: const Text(
-          'Tem certeza que deseja remover esta nota?',
-        ),
+        content: const Text('Tem certeza que deseja remover esta nota?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -158,6 +153,44 @@ class _NotesPageState extends State<NotesPage> {
     }
   }
 
+  void _openMapViewer(
+    DocumentReference<Map<String, dynamic>> noteRef,
+    Map<String, dynamic> data,
+  ) {
+    GeoPoint? gp;
+    final pos = data['position'];
+
+    if (pos is GeoPoint) {
+      gp = pos;
+    } else if (pos is Map && pos['geopoint'] is GeoPoint) {
+      gp = pos['geopoint'] as GeoPoint;
+    }
+
+    final ll.LatLng? initialLatLng = gp == null
+        ? null
+        : ll.LatLng(gp.latitude, gp.longitude);
+
+    final double? initialZoom = (data['zoom'] as num?)?.toDouble();
+
+    final addressValue = data['address'];
+    final String? initialAddress =
+        addressValue is String && addressValue.trim().isNotEmpty
+        ? addressValue.trim()
+        : null;
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => MapViewerEditorPage(
+          noteRef: noteRef,
+          initialLatLng: initialLatLng,
+          initialZoom: initialZoom,
+          initialAddress: initialAddress,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -173,9 +206,7 @@ class _NotesPageState extends State<NotesPage> {
                   children: [
                     TextField(
                       controller: createController,
-                      decoration: const InputDecoration(
-                        labelText: 'Descrição',
-                      ),
+                      decoration: const InputDecoration(labelText: 'Descrição'),
                       onSubmitted: (_) => _add(),
                     ),
                     const SizedBox(height: 16),
@@ -189,8 +220,7 @@ class _NotesPageState extends State<NotesPage> {
                   ],
                 ),
               ),
-              if (loading)
-                const CircularProgressIndicator(),
+              if (loading) const CircularProgressIndicator(),
               if (message != null)
                 Padding(
                   padding: const EdgeInsets.only(top: 12),
@@ -198,23 +228,17 @@ class _NotesPageState extends State<NotesPage> {
                 ),
               const Divider(),
               Expanded(
-                child: StreamBuilder<
-                    QuerySnapshot<Map<String, dynamic>>>(
+                child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
                   stream: _col
                       .orderBy('createdAt', descending: true)
                       .snapshots(),
                   builder: (context, snapshot) {
-                    if (snapshot.connectionState ==
-                        ConnectionState.waiting) {
-                      return const Center(
-                        child: CircularProgressIndicator(),
-                      );
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const Center(child: CircularProgressIndicator());
                     }
 
                     if (snapshot.hasError) {
-                      return Center(
-                        child: Text('Erro: ${snapshot.error}'),
-                      );
+                      return Center(child: Text('Erro: ${snapshot.error}'));
                     }
 
                     final docs = snapshot.data?.docs ?? [];
@@ -227,11 +251,11 @@ class _NotesPageState extends State<NotesPage> {
 
                     return ListView.separated(
                       itemCount: docs.length,
-                      separatorBuilder: (_, _) =>
-                          const Divider(height: 0),
+                      separatorBuilder: (_, _) => const Divider(height: 0),
                       itemBuilder: (context, i) {
                         final doc = docs[i];
                         final data = doc.data();
+                        final address = (data['address'] ?? '').toString();
 
                         if (editingId == doc.id) {
                           return Padding(
@@ -246,8 +270,7 @@ class _NotesPageState extends State<NotesPage> {
                                     controller: inlineController,
                                     focusNode: inlineFocus,
                                     autofocus: true,
-                                    decoration:
-                                        const InputDecoration(
+                                    decoration: const InputDecoration(
                                       labelText: 'Editar descrição',
                                       border: OutlineInputBorder(),
                                     ),
@@ -256,8 +279,7 @@ class _NotesPageState extends State<NotesPage> {
                                   ),
                                 ),
                                 IconButton(
-                                  onPressed: () =>
-                                      _commitInlineEdit(doc.id),
+                                  onPressed: () => _commitInlineEdit(doc.id),
                                   icon: const Icon(Icons.check),
                                 ),
                                 IconButton(
@@ -270,14 +292,30 @@ class _NotesPageState extends State<NotesPage> {
                         }
 
                         return ListTile(
-                          title: Text(
-                            (data['description'] ?? '').toString(),
-                          ),
+                          title: Text((data['description'] ?? '').toString()),
+                          subtitle: address.isEmpty
+                              ? null
+                              : Text(
+                                  address,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
                           onTap: () => _startInlineEdit(doc),
-                          trailing: IconButton(
-                            icon: const Icon(Icons.delete_outline),
-                            tooltip: 'Remover',
-                            onPressed: () => _remove(doc.id),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              IconButton(
+                                icon: const Icon(Icons.map_rounded),
+                                tooltip: 'Mapa',
+                                onPressed: () =>
+                                    _openMapViewer(_col.doc(doc.id), data),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.delete_outline),
+                                tooltip: 'Remover',
+                                onPressed: () => _remove(doc.id),
+                              ),
+                            ],
                           ),
                         );
                       },
