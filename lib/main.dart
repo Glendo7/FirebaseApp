@@ -1,5 +1,6 @@
 
 import 'package:flutter/material.dart';
+import 'l10n/app_localizations.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -31,6 +32,8 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'Firebase App',
       theme: ThemeData(primarySwatch: Colors.indigo),
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
       home: const AuthGate(),
     );
   }
