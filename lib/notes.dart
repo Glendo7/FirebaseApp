@@ -323,6 +323,69 @@ class _NotesPageState extends State<NotesPage> {
     return null;
   }
 
+  String formatDate(Timestamp? ts) {
+    if (ts == null) return 'Selecionar data';
+    final date = ts.toDate();
+    final day = date.day.toString().padLeft(2, '0');
+    final month = date.month.toString().padLeft(2, '0');
+    return '$day/$month/${date.year}';
+  }
+
+  String formatTimeMinutes(int? minutes) {
+    if (minutes == null) return 'Selecionar horário';
+    final hour = (minutes ~/ 60).toString().padLeft(2, '0');
+    final minute = (minutes % 60).toString().padLeft(2, '0');
+    return '$hour:$minute';
+  }
+
+  Future<void> _pickDate(
+    DocumentReference<Map<String, dynamic>> noteRef,
+    Timestamp? current,
+  ) async {
+    final now = DateTime.now();
+    final initial = current?.toDate() ?? now;
+
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: initial,
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2100),
+    );
+
+    if (picked == null) return;
+
+    await noteRef.update({
+      'date': Timestamp.fromDate(
+        DateTime(picked.year, picked.month, picked.day),
+      ),
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  Future<void> _pickTime(
+    DocumentReference<Map<String, dynamic>> noteRef,
+    int? currentMinutes,
+  ) async {
+    final initial = currentMinutes == null
+        ? TimeOfDay.now()
+        : TimeOfDay(
+            hour: currentMinutes ~/ 60,
+            minute: currentMinutes % 60,
+          );
+
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: initial,
+    );
+
+    if (picked == null) return;
+
+    await noteRef.update({
+      'timeMinutes': picked.hour * 60 + picked.minute,
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -423,24 +486,54 @@ class _NotesPageState extends State<NotesPage> {
                           );
                         }
 
+                        final noteRef = _col.doc(doc.id);
+                        final dateValue = data['date'];
+                        final noteDate = dateValue is Timestamp
+                            ? dateValue
+                            : null;
+                        final timeValue = data['timeMinutes'];
+                        final noteMinutes = timeValue is num
+                            ? timeValue.toInt()
+                            : null;
+
                         return ListTile(
                           title: Text((data['description'] ?? '').toString()),
-                          subtitle: subtitleText == null
-                              ? null
-                              : Text(
+                          subtitle: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (subtitleText != null)
+                                Text(
                                   subtitleText,
                                   maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
                                 ),
+                              Text(
+                                'Data: ${formatDate(noteDate)} · '
+                                'Horário: ${formatTimeMinutes(noteMinutes)}',
+                              ),
+                            ],
+                          ),
                           onTap: () => _startInlineEdit(doc),
                           trailing: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               IconButton(
+                                icon: const Icon(Icons.calendar_month),
+                                tooltip: 'Escolher data',
+                                onPressed: () => _pickDate(noteRef, noteDate),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.access_time),
+                                tooltip: 'Escolher horário',
+                                onPressed: () =>
+                                    _pickTime(noteRef, noteMinutes),
+                              ),
+                              IconButton(
                                 icon: const Icon(Icons.map_rounded),
                                 tooltip: 'Mapa',
                                 onPressed: () =>
-                                    _openMapViewer(_col.doc(doc.id), data),
+                                    _openMapViewer(noteRef, data),
                               ),
                               IconButton(
                                 icon: const Icon(Icons.delete_outline),
