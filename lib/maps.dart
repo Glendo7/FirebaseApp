@@ -1,3 +1,4 @@
+import 'package:geolocator/geolocator.dart';
 import 'dart:convert';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
@@ -89,6 +90,10 @@ class _MapViewerEditorPageState extends State<MapViewerEditorPage> {
           _fitToPoints(_routePoints);
           return;
         }
+      }
+
+      if (_initialPoint == null) {
+        await _setInitialFromGPS();
       }
 
       if (_initialPoint != null && _finalPoint != null) {
@@ -715,5 +720,61 @@ class _MapViewerEditorPageState extends State<MapViewerEditorPage> {
         ],
       ),
     );
+  }
+
+Future<void> _setInitialFromGPS() async {
+    try {
+      final permitido = await _ensureLocationPermission();
+      if (!permitido || !mounted) return;
+
+      final pos = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+        ),
+      );
+
+      if (!mounted) return;
+
+      final ponto = ll.LatLng(pos.latitude, pos.longitude);
+      setState(() {
+        _initialPoint = ponto;
+        _zoom = 14;
+      });
+      _safeMove(ponto, 14);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Não foi possível obter o GPS: $e')),
+      );
+    }
+  }
+
+  Future<bool> _ensureLocationPermission() async {
+    final servicoAtivo = await Geolocator.isLocationServiceEnabled();
+    if (!servicoAtivo) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Ative o serviço de localização do dispositivo.')),
+        );
+      }
+      return false;
+    }
+
+    var permissao = await Geolocator.checkPermission();
+    if (permissao == LocationPermission.denied) {
+      permissao = await Geolocator.requestPermission();
+    }
+
+    if (permissao == LocationPermission.denied ||
+        permissao == LocationPermission.deniedForever) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Permissão de localização não concedida.')),
+        );
+      }
+      return false;
+    }
+
+    return true;
   }
 }
